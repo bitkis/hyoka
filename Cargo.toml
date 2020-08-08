@@ -3,6 +3,11 @@ name = "hyoka"
 version = "0.1.0"
 authors = ["hanif.ariffin.4326@gmail.com <Hanif Bin Ariffin>"]
 edition = "2018"
+description = "Generic REPL that can be configured to do pretty much anything you want."
+license = "MIT"
+documentation = "https://github.com/hbina/hyoka"
+repository = "https://github.com/hbina/hyoka"
+homepage = "https://github.com/hbina/hyoka"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
