@@ -1,7 +1,7 @@
 extern crate hyoka;
 
 pub fn main() {
-    let mut repl = hyoka::Repl::new("repl>", 0, |x: &mut i32, y: String| {
+    let mut repl = hyoka::Repl::new("summation>", 0, |x: &mut i32, y: String| {
         let y = {
             let mut y = y;
             y.pop();
