@@ -34,15 +34,15 @@ impl From<&str> for Expression {
 
 impl Expression {
     pub fn parse(tokens: &mut Vec<String>) -> Result<Expression, String> {
-        if tokens.len() == 0 {
-            Err(format!("unexpected EOF while parsing the tokens."))
+        if tokens.is_empty() {
+            Err("unexpected EOF while parsing the tokens.".to_string())
         } else {
             let token = tokens.remove(0);
             match token.as_str() {
                 "(" => {
                     // TODO: Can we avoid ITM here?
                     let mut list = Vec::<Expression>::new();
-                    while tokens.len() != 1 && tokens[0] != ")" {
+                    while tokens[0] != ")" {
                         match Expression::parse(tokens) {
                             Ok(v) => list.push(v),
                             Err(e) => {
@@ -50,43 +50,29 @@ impl Expression {
                             }
                         }
                     }
-                    if tokens.len() == 1 && tokens[0] == ")" {
-                        tokens.remove(0);
-                        Ok(Expression::List(list))
-                    } else {
-                        Err(format!("Malformed expression. Insufficient closing ')'"))
-                    }
+                    tokens.remove(0);
+                    Ok(Expression::List(list))
                 }
-                ")" => Err(format!("unexpected ')' found while parsing tokens")),
+                ")" => Err("unexpected ')' found while parsing tokens".to_string()),
                 _ => Ok(Expression::from(token.as_str())),
             }
         }
     }
 
-    pub fn evaluate(&self, env: &mut Env) -> Option<Expression> {
-        match self.clone() {
+    pub fn evaluate(&mut self, env: &mut Env) -> Option<Expression> {
+        match self {
             Expression::Float(_) => Some(self.clone()),
-            Expression::Symbol(name) => {
-                match env.global.get(&name) {
-                    Some(Expression::Float(x)) => Some(Expression::Float(*x)),
-                    Some(Expression::Symbol(x)) => {
-                        let s = Expression::Symbol(x.clone());
-                        // NOTE: This could potentially introduce infinite loop...
-                        s.evaluate(env)
-                    }
-                    Some(Expression::List(list)) => {
-                        let s = Expression::List(list.clone());
-                        // NOTE: This could potentially introduce infinite loop...
-                        s.evaluate(env)
-                    }
-                    // NOTE: WTF Was I trying to do here????
-                    Some(Expression::Procedure(parameter_symbols, body)) => Some(
-                        Expression::Procedure(parameter_symbols.clone(), body.clone()),
-                    ),
-                    None => Some(Expression::Symbol(name.clone())),
-                }
-            }
-            Expression::List(mut list) => {
+            Expression::Symbol(name) => match env.global.get(name) {
+                Some(Expression::Float(x)) => Some(Expression::Float(*x)),
+                // TODO: This seems dubious, it ought to be possible to recursively call evaluate without having to copy?
+                Some(Expression::Symbol(x)) => Expression::Symbol(x.clone()).evaluate(env),
+                Some(Expression::List(list)) => Expression::List(list.clone()).evaluate(env),
+                Some(Expression::Procedure(parameter_symbols, body)) => Some(
+                    Expression::Procedure(parameter_symbols.clone(), body.clone()),
+                ),
+                None => Some(Expression::Symbol(name.clone())),
+            },
+            Expression::List(ref mut list) => {
                 match list.as_mut_slice() {
                     [Expression::Symbol(procedure_name), args @ ..] => {
                         match procedure_name.as_str() {
@@ -141,7 +127,9 @@ impl Expression {
                                 }
                             }
                             "define" => {
-                                if let [_, Expression::Symbol(name), expression] = list.as_slice() {
+                                if let [_, Expression::Symbol(name), ref mut expression] =
+                                    list.as_mut_slice()
+                                {
                                     if let Some(evaluation) = expression.evaluate(env) {
                                         env.global.insert(name.clone(), evaluation);
                                     }
@@ -154,20 +142,23 @@ impl Expression {
                                 {
                                     if parameter.len() == args.len() {
                                         let mut env = env.clone();
-                                        let mut local_env = args.iter().zip(parameter.iter()).fold(
-                                            Env::new(),
-                                            |mut local_env, (arg_body, arg_symbol)| {
-                                                let value = arg_body.evaluate(&mut env).unwrap();
-                                                if let Expression::Symbol(arg_symbol) = arg_symbol {
+                                        let mut local_env =
+                                            args.iter_mut().zip(parameter.iter()).fold(
+                                                Env::new(),
+                                                |mut local_env, (arg_body, arg_symbol)| {
+                                                    let value =
+                                                        arg_body.evaluate(&mut env).unwrap();
+                                                    if let Expression::Symbol(arg_symbol) =
+                                                        arg_symbol
+                                                    {
+                                                        local_env
+                                                            .global
+                                                            .insert(arg_symbol.clone(), value);
+                                                    }
                                                     local_env
-                                                        .global
-                                                        .insert(arg_symbol.clone(), value);
-                                                }
-                                                local_env
-                                            },
-                                        );
-                                        let procedure_call = Expression::List(body.clone());
-                                        procedure_call.evaluate(&mut local_env)
+                                                },
+                                            );
+                                        Expression::List(body.clone()).evaluate(&mut local_env)
                                     } else {
                                         None
                                     }
@@ -194,16 +185,16 @@ pub fn main() {
             .split_ascii_whitespace()
             .map(String::from)
             .collect::<Vec<String>>();
-        let result = if let Ok(Some(Expression::Float(result))) = Expression::parse(&mut y)
-            .map(|x| x.evaluate(env))
+        if let Ok(Some(Expression::Float(result))) = Expression::parse(&mut y)
+            .map(|mut x| x.evaluate(env))
             .map_err(|x| {
                 println!("error:{}", x);
-            }) {
+            })
+        {
             Some(format!("{}", result))
         } else {
             None
-        };
-        result
+        }
     });
     repl.run();
 }

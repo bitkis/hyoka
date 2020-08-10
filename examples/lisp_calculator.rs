@@ -53,14 +53,15 @@ impl Expression {
     }
 
     pub fn evaluate(&mut self) -> Option<Expression> {
-        match self.clone() {
+        match self {
+            // TODO: I think we could solve this clone by using enum merely as an indirection using Rc
             Expression::Float(_) => Some(self.clone()),
             Expression::Symbol(_) => Some(self.clone()),
-            Expression::List(mut list) => {
+            Expression::List(ref mut list) => {
                 let car = list
                     .get(0)
                     .expect("Attempting to evaluate an empty Expression::List.");
-                match car.clone() {
+                match car {
                     Expression::Symbol(procedure_name) => {
                         match procedure_name.as_str() {
                             // TODO: Make this a macro...
