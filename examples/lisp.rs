@@ -42,7 +42,7 @@ impl Expression {
                 "(" => {
                     // TODO: Can we avoid ITM here?
                     let mut list = Vec::<Expression>::new();
-                    while tokens[0] != ")" {
+                    while tokens.len() != 1 && tokens[0] != ")" {
                         match Expression::parse(tokens) {
                             Ok(v) => list.push(v),
                             Err(e) => {
@@ -50,8 +50,12 @@ impl Expression {
                             }
                         }
                     }
-                    tokens.remove(0);
-                    Ok(Expression::List(list))
+                    if tokens.len() == 1 && tokens[0] == ")" {
+                        tokens.remove(0);
+                        Ok(Expression::List(list))
+                    } else {
+                        Err(format!("Malformed expression. Insufficient closing ')'"))
+                    }
                 }
                 ")" => Err(format!("unexpected ')' found while parsing tokens")),
                 _ => Ok(Expression::from(token.as_str())),
@@ -145,12 +149,6 @@ impl Expression {
                                 None
                             }
                             name => {
-                                println!(
-                                    "calling procedure\nname:{:#?}\nargs:{:#?}\nbody:{:#?}",
-                                    name,
-                                    args,
-                                    env.global.get(name)
-                                );
                                 if let Some(Expression::Procedure(parameter, body)) =
                                     env.global.get(name)
                                 {
@@ -160,10 +158,6 @@ impl Expression {
                                             Env::new(),
                                             |mut local_env, (arg_body, arg_symbol)| {
                                                 let value = arg_body.evaluate(&mut env).unwrap();
-                                                println!(
-                                                    "evaluated\narg_body:{:#?}\nvalue:{:#?}",
-                                                    arg_body, value
-                                                );
                                                 if let Expression::Symbol(arg_symbol) = arg_symbol {
                                                     local_env
                                                         .global
@@ -186,6 +180,7 @@ impl Expression {
                     [..] => None,
                 }
             }
+            // NOTE: What _should_ happen here?
             Expression::Procedure(_, _) => None,
         }
     }
@@ -199,14 +194,15 @@ pub fn main() {
             .split_ascii_whitespace()
             .map(String::from)
             .collect::<Vec<String>>();
-        let result = if let Ok(Some(Expression::Float(result))) =
-            Expression::parse(&mut y).map(|x| x.evaluate(env))
-        {
+        let result = if let Ok(Some(Expression::Float(result))) = Expression::parse(&mut y)
+            .map(|x| x.evaluate(env))
+            .map_err(|x| {
+                println!("error:{}", x);
+            }) {
             Some(format!("{}", result))
         } else {
             None
         };
-        println!("env:{:#?}", env);
         result
     });
     repl.run();
