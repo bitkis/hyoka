@@ -1,8 +1,8 @@
 use std::io::prelude::*;
 
 pub struct Repl<S, F>
-    where
-        F: Fn(&mut S, String) -> String,
+where
+    F: Fn(&mut S, String) -> String,
 {
     state: S,
     print: &'static str,
@@ -10,8 +10,8 @@ pub struct Repl<S, F>
 }
 
 impl<S, F> Repl<S, F>
-    where
-        F: Fn(&mut S, String) -> String,
+where
+    F: Fn(&mut S, String) -> String,
 {
     pub fn new(print: &'static str, state: S, evaluate: F) -> Self {
         Self {

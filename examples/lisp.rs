@@ -99,10 +99,7 @@ impl Expression {
                                     }
                                 })
                                 .collect::<Vec<Option<(Expression, Expression)>>>();
-                            if parameters.iter().any(Option::is_none) {
-                                println!("some of the procedure's paramters are not floats.");
-                                None
-                            } else {
+                            if parameters.iter().all(Option::is_some) {
                                 let parameters = parameters
                                     .iter()
                                     .map(|x| x.clone().unwrap())
@@ -122,6 +119,8 @@ impl Expression {
                                     .collect::<Vec<Expression>>();
                                 let body = Expression::List(body.clone());
                                 body.evaluate(env)
+                            } else {
+                                None
                             }
                         }
                     }
@@ -145,10 +144,14 @@ impl Expression {
                                     Some(x) => match x {
                                         Expression::Float(x) => acc + x,
                                         _ => {
-                                            panic!("All evaluation should yield Expression::Float")
+                                            println!("Ignoring values that are not Expression::Float");
+                                            acc
                                         }
                                     },
-                                    _ => panic!("Evaluation failed."),
+                                    None => {
+                                        println!("Ignoring values that are not Expression::Float");
+                                        acc
+                                    }
                                 });
                                 Some(Expression::Float(result))
                             }
@@ -159,10 +162,14 @@ impl Expression {
                                     Some(x) => match x {
                                         Expression::Float(x) => acc - x,
                                         _ => {
-                                            panic!("All evaluation should yield Expression::Float")
+                                            println!("Ignoring values that are not Expression::Float");
+                                            acc
                                         }
                                     },
-                                    _ => panic!("Evaluation failed."),
+                                    None => {
+                                        println!("Ignoring values that are not Expression::Float");
+                                        acc
+                                    }
                                 });
                                 Some(Expression::Float(result))
                             }
@@ -173,10 +180,14 @@ impl Expression {
                                     Some(x) => match x {
                                         Expression::Float(x) => acc * x,
                                         _ => {
-                                            panic!("All evaluation should yield Expression::Float")
+                                            println!("Ignoring values that are not Expression::Float");
+                                            acc
                                         }
                                     },
-                                    _ => panic!("Evaluation failed."),
+                                    None => {
+                                        println!("Ignoring values that are not Expression::Float");
+                                        acc
+                                    }
                                 });
                                 Some(Expression::Float(result))
                             }
@@ -187,18 +198,19 @@ impl Expression {
                                     Some(x) => match x {
                                         Expression::Float(x) => acc / x,
                                         _ => {
-                                            panic!("All evaluation should yield Expression::Float")
+                                            println!("Ignoring values that are not Expression::Float");
+                                            acc
                                         }
                                     },
-                                    _ => panic!("Evaluation failed."),
+                                    None => {
+                                        println!("Ignoring values that are not Expression::Float");
+                                        acc
+                                    }
                                 });
                                 Some(Expression::Float(result))
                             }
                             "lambda" => {
-                                if list.len() != 3 {
-                                    println!("`lambda` expects (<parameters> <body>)");
-                                    None
-                                } else {
+                                if list.len() == 3 {
                                     if let Expression::List(parameters) = list.get(1).unwrap() {
                                         if let Expression::List(body) = list.get(2).unwrap() {
                                             Some(Expression::Procedure(
@@ -206,28 +218,23 @@ impl Expression {
                                                 body.clone(),
                                             ))
                                         } else {
-                                            println!(
-                                                "a `lambda`'s body must be a list of expressions."
-                                            );
                                             None
                                         }
                                     } else {
                                         None
                                     }
+                                } else {
+                                    None
                                 }
                             }
                             "define" => {
-                                if list.len() != 3 {
-                                    println!("`define` takes (<name> <expression>)");
-                                } else {
-                                    let name = if let Expression::Symbol(name) =
-                                        list.get(1).unwrap()
-                                    {
-                                        name.clone()
-                                    } else {
-                                        println!("a procedure's name must be a symbol. Aborting this definition.");
-                                        return None;
-                                    };
+                                if list.len() == 3 {
+                                    let name =
+                                        if let Expression::Symbol(name) = list.get(1).unwrap() {
+                                            name.clone()
+                                        } else {
+                                            return None;
+                                        };
                                     let expression = list.get(2).unwrap().evaluate(env).unwrap();
                                     env.global.insert(name, expression);
                                 }
@@ -241,51 +248,37 @@ impl Expression {
                                     let args = list.iter().skip(1);
                                     if parameter.len() == args.len() {
                                         let mut env = env.clone();
-                                        let mut local_env = args
-                                            .zip(parameter.iter())
-                                            .fold(Env::new(), |mut local_env, (value, name)| {
-                                                let evaluated_value = value.evaluate(&mut env).unwrap();
+                                        let mut local_env = args.zip(parameter.iter()).fold(
+                                            Env::new(),
+                                            |mut local_env, (value, name)| {
+                                                let evaluated_value =
+                                                    value.evaluate(&mut env).unwrap();
                                                 match name {
-                                                    Expression::Symbol(name)=>{
-                                                        println!("matching args name:{:?} evaluated_value:{:?}", name, evaluated_value);
-                                                        local_env.global.insert(name.clone(), evaluated_value);
-                                                    },
-                                                    _=>{
-                                                        println!("invalid expression for a symbol in parameter:{:?}",name)
+                                                    Expression::Symbol(name) => {
+                                                        local_env
+                                                            .global
+                                                            .insert(name.clone(), evaluated_value);
                                                     }
+                                                    _ => {}
                                                 }
                                                 local_env
-                                            });
-                                        println!("local_env:{:?}", local_env);
+                                            },
+                                        );
                                         let procedure_call = Expression::List(body.clone());
                                         procedure_call.evaluate(&mut local_env)
                                     } else {
                                         None
                                     }
                                 } else {
-                                    println!("unknown procedure '{}' invoked.", procedure_name);
                                     None
                                 }
                             }
                         }
                     }
-                    _ => {
-                        println!("expected Expression::Symbol to represent procedure's name but found something else...");
-                        None
-                    }
+                    _ => None,
                 }
             }
-            Expression::Procedure(parameters, body) => {
-                println!(
-                    r#"
-                we have somehow stumbled across a procedure? I am interested in how this could happen.
-                parameters:{:?}
-                body:{:?}
-                "#,
-                    parameters, body
-                );
-                None
-            }
+            Expression::Procedure(_, _) => None,
         }
     }
 }
