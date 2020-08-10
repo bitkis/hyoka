@@ -82,6 +82,7 @@ impl Expression {
                                 .map(|expr| {
                                     if let Expression::Symbol(name) = expr {
                                         if let Some(env_expr) = env.global.get(name) {
+                                            // NOTE: For now, all paramters must be floats because that is the only atomic types that we currently support.
                                             if let Expression::Float(value) = env_expr {
                                                 Some((
                                                     Expression::Symbol(name.clone()),
@@ -99,13 +100,14 @@ impl Expression {
                                 })
                                 .collect::<Vec<Option<(Expression, Expression)>>>();
                             if parameters.iter().any(Option::is_none) {
-                                println!("some of the procedure's paramters are not symbols.");
+                                println!("some of the procedure's paramters are not floats.");
                                 None
                             } else {
                                 let parameters = parameters
                                     .iter()
                                     .map(|x| x.clone().unwrap())
                                     .collect::<Vec<(Expression, Expression)>>();
+                                // Swap every symbol in the body with the unwrapped parameters above.
                                 let body = body
                                     .iter()
                                     .map(|symbol| {
@@ -233,9 +235,33 @@ impl Expression {
                                 None
                             }
                             name => {
-                                if let Some(procedure) = env.global.get(name) {
-                                    let procedure = procedure.evaluate(env) 
-                                    None
+                                if let Some(Expression::Procedure(parameter, body)) =
+                                    env.global.get(name)
+                                {
+                                    let args = list.iter().skip(1);
+                                    if parameter.len() == args.len() {
+                                        let mut env = env.clone();
+                                        let mut local_env = args
+                                            .zip(parameter.iter())
+                                            .fold(Env::new(), |mut local_env, (value, name)| {
+                                                let evaluated_value = value.evaluate(&mut env).unwrap();
+                                                match name {
+                                                    Expression::Symbol(name)=>{
+                                                        println!("matching args name:{:?} evaluated_value:{:?}", name, evaluated_value);
+                                                        local_env.global.insert(name.clone(), evaluated_value);
+                                                    },
+                                                    _=>{
+                                                        println!("invalid expression for a symbol in parameter:{:?}",name)
+                                                    }
+                                                }
+                                                local_env
+                                            });
+                                        println!("local_env:{:?}", local_env);
+                                        let procedure_call = Expression::List(body.clone());
+                                        procedure_call.evaluate(&mut local_env)
+                                    } else {
+                                        None
+                                    }
                                 } else {
                                     println!("unknown procedure '{}' invoked.", procedure_name);
                                     None

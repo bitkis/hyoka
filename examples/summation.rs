@@ -7,7 +7,6 @@ pub fn main() {
             y.pop();
             y
         };
-
         let y = y
             .parse::<i32>()
             .expect(&format!("Cannot convert '{}' into an integer", y));

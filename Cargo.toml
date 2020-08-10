@@ -1,6 +1,6 @@
 [package]
 name = "hyoka"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["hanif.ariffin.4326@gmail.com <Hanif Bin Ariffin>"]
 edition = "2018"
 description = "Generic REPL that can be configured to do pretty much anything you want."
