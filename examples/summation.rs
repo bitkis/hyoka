@@ -11,7 +11,7 @@ pub fn main() {
             .parse::<i32>()
             .expect(&format!("Cannot convert '{}' into an integer", y));
         *x += y;
-        format!("x:{}", x)
+        Some(format!("x:{}", x))
     });
     repl.run();
 }

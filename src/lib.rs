@@ -2,7 +2,7 @@ use std::io::prelude::*;
 
 pub struct Repl<S, F>
 where
-    F: Fn(&mut S, String) -> String,
+    F: Fn(&mut S, String) -> Option<String>,
 {
     state: S,
     print: &'static str,
@@ -11,7 +11,7 @@ where
 
 impl<S, F> Repl<S, F>
 where
-    F: Fn(&mut S, String) -> String,
+    F: Fn(&mut S, String) -> Option<String>,
 {
     pub fn new(print: &'static str, state: S, evaluate: F) -> Self {
         Self {
@@ -44,7 +44,9 @@ where
                     "'clear' is currently not implemented. It should clear the screen."
                 ),
                 _ => {
-                    println!("{}", (self.evaluate)(&mut self.state, input));
+                    if let Some(result) = (self.evaluate)(&mut self.state, input) {
+                        println!("{}", result)
+                    }
                 }
             }
         }

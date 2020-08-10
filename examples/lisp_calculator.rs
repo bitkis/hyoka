@@ -145,7 +145,7 @@ pub fn main() {
             .map(String::from)
             .collect::<Vec<String>>();
         match Expression::parse(&mut y) {
-            Ok(mut result) => format!("result:{:?}", result.evaluate()),
+            Ok(mut result) => Some(format!("result:{:?}", result.evaluate())),
             Err(e) => panic!(e),
         }
     });

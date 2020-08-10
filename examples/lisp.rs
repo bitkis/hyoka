@@ -63,203 +63,111 @@ impl Expression {
         match self.clone() {
             Expression::Float(_) => Some(self.clone()),
             Expression::Symbol(name) => {
-                if env.global.contains_key(&name) {
-                    match env.global.get(&name).unwrap() {
-                        Expression::Float(x) => Some(Expression::Float(*x)),
-                        Expression::Symbol(x) => {
-                            let s = Expression::Symbol(x.clone());
-                            // NOTE: This could potentially introduce infinite loop...
-                            s.evaluate(env)
-                        }
-                        Expression::List(list) => {
-                            let s = Expression::List(list.clone());
-                            // NOTE: This could potentially introduce infinite loop...
-                            s.evaluate(env)
-                        }
-                        Expression::Procedure(parameters, body) => {
-                            let parameters = parameters
-                                .iter()
-                                .map(|expr| {
-                                    if let Expression::Symbol(name) = expr {
-                                        if let Some(env_expr) = env.global.get(name) {
-                                            // NOTE: For now, all paramters must be floats because that is the only atomic types that we currently support.
-                                            if let Expression::Float(value) = env_expr {
-                                                Some((
-                                                    Expression::Symbol(name.clone()),
-                                                    Expression::Float(*value),
-                                                ))
-                                            } else {
-                                                None
-                                            }
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect::<Vec<Option<(Expression, Expression)>>>();
-                            if parameters.iter().all(Option::is_some) {
-                                let parameters = parameters
-                                    .iter()
-                                    .map(|x| x.clone().unwrap())
-                                    .collect::<Vec<(Expression, Expression)>>();
-                                // Swap every symbol in the body with the unwrapped parameters above.
-                                let body = body
-                                    .iter()
-                                    .map(|symbol| {
-                                        if let Some((_, value)) =
-                                            parameters.iter().find(|(key, _)| key == symbol)
-                                        {
-                                            value.clone()
-                                        } else {
-                                            symbol.clone()
-                                        }
-                                    })
-                                    .collect::<Vec<Expression>>();
-                                let body = Expression::List(body.clone());
-                                body.evaluate(env)
-                            } else {
-                                None
-                            }
-                        }
+                match env.global.get(&name) {
+                    Some(Expression::Float(x)) => Some(Expression::Float(*x)),
+                    Some(Expression::Symbol(x)) => {
+                        let s = Expression::Symbol(x.clone());
+                        // NOTE: This could potentially introduce infinite loop...
+                        s.evaluate(env)
                     }
-                } else {
-                    Some(Expression::Symbol(name.clone()))
+                    Some(Expression::List(list)) => {
+                        let s = Expression::List(list.clone());
+                        // NOTE: This could potentially introduce infinite loop...
+                        s.evaluate(env)
+                    }
+                    // NOTE: WTF Was I trying to do here????
+                    Some(Expression::Procedure(parameter_symbols, body)) => Some(
+                        Expression::Procedure(parameter_symbols.clone(), body.clone()),
+                    ),
+                    None => Some(Expression::Symbol(name.clone())),
                 }
             }
             Expression::List(mut list) => {
-                println!("list:{:?}", list);
-                let car = list
-                    .get(0)
-                    .expect("Attempting to evaluate an empty Expression::List.");
-                match car.clone() {
-                    Expression::Symbol(procedure_name) => {
+                match list.as_mut_slice() {
+                    [Expression::Symbol(procedure_name), args @ ..] => {
                         match procedure_name.as_str() {
                             // TODO: Make this a macro...
                             "+" => {
-                                let result = list.iter_mut().skip(1).fold(0.0f32, |acc, x| match x
-                                    .evaluate(env)
-                                {
-                                    Some(x) => match x {
-                                        Expression::Float(x) => acc + x,
-                                        _ => {
-                                            println!("Ignoring values that are not Expression::Float");
-                                            acc
-                                        }
-                                    },
-                                    None => {
-                                        println!("Ignoring values that are not Expression::Float");
+                                let result = args.iter_mut().fold(0.0f32, |acc, x| {
+                                    if let Some(Expression::Float(x)) = x.evaluate(env) {
+                                        acc + x
+                                    } else {
                                         acc
                                     }
                                 });
                                 Some(Expression::Float(result))
                             }
                             "-" => {
-                                let result = list.iter_mut().skip(1).fold(0.0f32, |acc, x| match x
-                                    .evaluate(env)
-                                {
-                                    Some(x) => match x {
-                                        Expression::Float(x) => acc - x,
-                                        _ => {
-                                            println!("Ignoring values that are not Expression::Float");
-                                            acc
-                                        }
-                                    },
-                                    None => {
-                                        println!("Ignoring values that are not Expression::Float");
+                                let result = args.iter_mut().fold(0.0f32, |acc, x| {
+                                    if let Some(Expression::Float(x)) = x.evaluate(env) {
+                                        acc - x
+                                    } else {
                                         acc
                                     }
                                 });
                                 Some(Expression::Float(result))
                             }
                             "*" => {
-                                let result = list.iter_mut().skip(1).fold(1.0f32, |acc, x| match x
-                                    .evaluate(env)
-                                {
-                                    Some(x) => match x {
-                                        Expression::Float(x) => acc * x,
-                                        _ => {
-                                            println!("Ignoring values that are not Expression::Float");
-                                            acc
-                                        }
-                                    },
-                                    None => {
-                                        println!("Ignoring values that are not Expression::Float");
+                                let result = args.iter_mut().fold(1.0f32, |acc, x| {
+                                    if let Some(Expression::Float(x)) = x.evaluate(env) {
+                                        acc * x
+                                    } else {
                                         acc
                                     }
                                 });
                                 Some(Expression::Float(result))
                             }
                             "/" => {
-                                let result = list.iter_mut().skip(1).fold(1.0f32, |acc, x| match x
-                                    .evaluate(env)
-                                {
-                                    Some(x) => match x {
-                                        Expression::Float(x) => acc / x,
-                                        _ => {
-                                            println!("Ignoring values that are not Expression::Float");
-                                            acc
-                                        }
-                                    },
-                                    None => {
-                                        println!("Ignoring values that are not Expression::Float");
+                                let result = args.iter_mut().fold(1.0f32, |acc, x| {
+                                    if let Some(Expression::Float(x)) = x.evaluate(env) {
+                                        acc / x
+                                    } else {
                                         acc
                                     }
                                 });
                                 Some(Expression::Float(result))
                             }
                             "lambda" => {
-                                if list.len() == 3 {
-                                    if let Expression::List(parameters) = list.get(1).unwrap() {
-                                        if let Expression::List(body) = list.get(2).unwrap() {
-                                            Some(Expression::Procedure(
-                                                parameters.clone(),
-                                                body.clone(),
-                                            ))
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
+                                if let [_, Expression::List(params), Expression::List(body)] =
+                                    list.as_slice()
+                                {
+                                    Some(Expression::Procedure(params.clone(), body.clone()))
                                 } else {
                                     None
                                 }
                             }
                             "define" => {
-                                if list.len() == 3 {
-                                    let name =
-                                        if let Expression::Symbol(name) = list.get(1).unwrap() {
-                                            name.clone()
-                                        } else {
-                                            return None;
-                                        };
-                                    let expression = list.get(2).unwrap().evaluate(env).unwrap();
-                                    env.global.insert(name, expression);
+                                if let [_, Expression::Symbol(name), expression] = list.as_slice() {
+                                    if let Some(evaluation) = expression.evaluate(env) {
+                                        env.global.insert(name.clone(), evaluation);
+                                    }
                                 }
-                                // Defining a procedure simply mutates the global environment.
                                 None
                             }
                             name => {
+                                println!(
+                                    "calling procedure\nname:{:#?}\nargs:{:#?}\nbody:{:#?}",
+                                    name,
+                                    args,
+                                    env.global.get(name)
+                                );
                                 if let Some(Expression::Procedure(parameter, body)) =
                                     env.global.get(name)
                                 {
-                                    let args = list.iter().skip(1);
                                     if parameter.len() == args.len() {
                                         let mut env = env.clone();
-                                        let mut local_env = args.zip(parameter.iter()).fold(
+                                        let mut local_env = args.iter().zip(parameter.iter()).fold(
                                             Env::new(),
-                                            |mut local_env, (value, name)| {
-                                                let evaluated_value =
-                                                    value.evaluate(&mut env).unwrap();
-                                                match name {
-                                                    Expression::Symbol(name) => {
-                                                        local_env
-                                                            .global
-                                                            .insert(name.clone(), evaluated_value);
-                                                    }
-                                                    _ => {}
+                                            |mut local_env, (arg_body, arg_symbol)| {
+                                                let value = arg_body.evaluate(&mut env).unwrap();
+                                                println!(
+                                                    "evaluated\narg_body:{:#?}\nvalue:{:#?}",
+                                                    arg_body, value
+                                                );
+                                                if let Expression::Symbol(arg_symbol) = arg_symbol {
+                                                    local_env
+                                                        .global
+                                                        .insert(arg_symbol.clone(), value);
                                                 }
                                                 local_env
                                             },
@@ -275,7 +183,7 @@ impl Expression {
                             }
                         }
                     }
-                    _ => None,
+                    [..] => None,
                 }
             }
             Expression::Procedure(_, _) => None,
@@ -291,10 +199,15 @@ pub fn main() {
             .split_ascii_whitespace()
             .map(String::from)
             .collect::<Vec<String>>();
-        match Expression::parse(&mut y) {
-            Ok(result) => format!("result:{:?} env:{:?}", result.evaluate(env), env),
-            Err(e) => panic!(e),
-        }
+        let result = if let Ok(Some(Expression::Float(result))) =
+            Expression::parse(&mut y).map(|x| x.evaluate(env))
+        {
+            Some(format!("{}", result))
+        } else {
+            None
+        };
+        println!("env:{:#?}", env);
+        result
     });
     repl.run();
 }
