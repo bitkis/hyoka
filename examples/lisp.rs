@@ -1,5 +1,7 @@
 extern crate hyoka;
 
+use std::rc::Rc;
+
 #[derive(Debug, Clone)]
 struct Env {
     global: std::collections::HashMap<String, Expression>,
@@ -16,10 +18,10 @@ impl Env {
 #[derive(Debug, Clone, PartialEq)]
 enum Expression {
     Float(f32),
-    Symbol(String),
-    List(Vec<Expression>),
+    Symbol(Rc<String>),
+    List(Rc<Vec<Expression>>),
     // (Parameters, Body)
-    Procedure(Vec<Expression>, Vec<Expression>),
+    Procedure(Rc<Vec<Expression>>, Rc<Vec<Expression>>),
 }
 
 impl From<&str> for Expression {
@@ -27,7 +29,7 @@ impl From<&str> for Expression {
         if let Ok(v) = value.parse::<f32>() {
             Expression::Float(v)
         } else {
-            Expression::Symbol(String::from(value))
+            Expression::Symbol(Rc::new(String::from(value)))
         }
     }
 }
@@ -51,7 +53,7 @@ impl Expression {
                         }
                     }
                     tokens.remove(0);
-                    Ok(Expression::List(list))
+                    Ok(Expression::List(Rc::new(list)))
                 }
                 ")" => Err("unexpected ')' found while parsing tokens".to_string()),
                 _ => Ok(Expression::from(token.as_str())),
@@ -59,10 +61,10 @@ impl Expression {
         }
     }
 
-    pub fn evaluate(&mut self, env: &mut Env) -> Option<Expression> {
+    pub fn evaluate(&self, env: &mut Env) -> Option<Expression> {
         match self {
             Expression::Float(_) => Some(self.clone()),
-            Expression::Symbol(name) => match env.global.get(name) {
+            Expression::Symbol(name) => match env.global.get(name.as_ref()) {
                 Some(Expression::Float(x)) => Some(Expression::Float(*x)),
                 // TODO: This seems dubious, it ought to be possible to recursively call evaluate without having to copy?
                 Some(Expression::Symbol(x)) => Expression::Symbol(x.clone()).evaluate(env),
@@ -72,13 +74,13 @@ impl Expression {
                 ),
                 None => Some(Expression::Symbol(name.clone())),
             },
-            Expression::List(ref mut list) => {
-                match list.as_mut_slice() {
-                    [Expression::Symbol(procedure_name), args @ ..] => {
+            Expression::List(list) => {
+                match &list.as_slice() {
+                    [Expression::Symbol(procedure_name), ref args @ ..] => {
                         match procedure_name.as_str() {
                             // TODO: Make this a macro...
                             "+" => {
-                                let result = args.iter_mut().fold(0.0f32, |acc, x| {
+                                let result = args.iter().fold(0.0f32, |acc, x| {
                                     if let Some(Expression::Float(x)) = x.evaluate(env) {
                                         acc + x
                                     } else {
@@ -88,7 +90,7 @@ impl Expression {
                                 Some(Expression::Float(result))
                             }
                             "-" => {
-                                let result = args.iter_mut().fold(0.0f32, |acc, x| {
+                                let result = args.iter().fold(0.0f32, |acc, x| {
                                     if let Some(Expression::Float(x)) = x.evaluate(env) {
                                         acc - x
                                     } else {
@@ -98,7 +100,7 @@ impl Expression {
                                 Some(Expression::Float(result))
                             }
                             "*" => {
-                                let result = args.iter_mut().fold(1.0f32, |acc, x| {
+                                let result = args.iter().fold(1.0f32, |acc, x| {
                                     if let Some(Expression::Float(x)) = x.evaluate(env) {
                                         acc * x
                                     } else {
@@ -108,7 +110,7 @@ impl Expression {
                                 Some(Expression::Float(result))
                             }
                             "/" => {
-                                let result = args.iter_mut().fold(1.0f32, |acc, x| {
+                                let result = args.iter().fold(1.0f32, |acc, x| {
                                     if let Some(Expression::Float(x)) = x.evaluate(env) {
                                         acc / x
                                     } else {
@@ -127,11 +129,11 @@ impl Expression {
                                 }
                             }
                             "define" => {
-                                if let [_, Expression::Symbol(name), ref mut expression] =
-                                    list.as_mut_slice()
+                                if let [_, Expression::Symbol(name), ref expression] =
+                                    list.as_slice()
                                 {
                                     if let Some(evaluation) = expression.evaluate(env) {
-                                        env.global.insert(name.clone(), evaluation);
+                                        env.global.insert(name.as_ref().clone(), evaluation);
                                     }
                                 }
                                 None
@@ -142,22 +144,18 @@ impl Expression {
                                 {
                                     if parameter.len() == args.len() {
                                         let mut env = env.clone();
-                                        let mut local_env =
-                                            args.iter_mut().zip(parameter.iter()).fold(
-                                                Env::new(),
-                                                |mut local_env, (arg_body, arg_symbol)| {
-                                                    let value =
-                                                        arg_body.evaluate(&mut env).unwrap();
-                                                    if let Expression::Symbol(arg_symbol) =
-                                                        arg_symbol
-                                                    {
-                                                        local_env
-                                                            .global
-                                                            .insert(arg_symbol.clone(), value);
-                                                    }
+                                        let mut local_env = args.iter().zip(parameter.iter()).fold(
+                                            Env::new(),
+                                            |mut local_env, (arg_body, arg_symbol)| {
+                                                let value = arg_body.evaluate(&mut env).unwrap();
+                                                if let Expression::Symbol(arg_symbol) = arg_symbol {
                                                     local_env
-                                                },
-                                            );
+                                                        .global
+                                                        .insert(arg_symbol.as_ref().clone(), value);
+                                                }
+                                                local_env
+                                            },
+                                        );
                                         Expression::List(body.clone()).evaluate(&mut local_env)
                                     } else {
                                         None
@@ -186,7 +184,7 @@ pub fn main() {
             .map(String::from)
             .collect::<Vec<String>>();
         if let Ok(Some(Expression::Float(result))) = Expression::parse(&mut y)
-            .map(|mut x| x.evaluate(env))
+            .map(|x| x.evaluate(env))
             .map_err(|x| {
                 println!("error:{}", x);
             })
