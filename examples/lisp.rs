@@ -63,22 +63,28 @@ impl Expression {
 
     pub fn evaluate(&self, env: &mut Env) -> Option<Expression> {
         match self {
-            Expression::Float(_) => Some(self.clone()),
+            // Expression::Float is an atom, it cannot be evaluated further.
+            Expression::Float(x) => Some(Expression::Float(*x)),
+            // Try to find this symbol in the global environment and evaluate it.
             Expression::Symbol(name) => match env.global.get(name.as_ref()) {
                 Some(Expression::Float(x)) => Some(Expression::Float(*x)),
-                // TODO: This seems dubious, it ought to be possible to recursively call evaluate without having to copy?
+                // NOTE: This is like having a pointer, this symbol references other symbols.
+                // Therefore, we "dereference" until we get something useful -- if there is any.
                 Some(Expression::Symbol(x)) => Expression::Symbol(x.clone()).evaluate(env),
+                // NOTE: If we remove the evaluation here, this program becomes "lazy"!
                 Some(Expression::List(list)) => Expression::List(list.clone()).evaluate(env),
                 Some(Expression::Procedure(parameter_symbols, body)) => Some(
                     Expression::Procedure(parameter_symbols.clone(), body.clone()),
                 ),
                 None => Some(Expression::Symbol(name.clone())),
             },
+            // We try to evaluate this list using the first element as its procedure over the rest of the list.
             Expression::List(list) => {
                 match &list.as_slice() {
                     [Expression::Symbol(procedure_name), ref args @ ..] => {
                         match procedure_name.as_str() {
-                            // TODO: Make this a macro...
+                            // NOTE: I think the operators below are not syntactically pure enough.
+                            // It should be possible to consume the list one by one, hence performing the folding operation organically in Lisp.
                             "+" => {
                                 let result = args.iter().fold(0.0f32, |acc, x| {
                                     if let Some(Expression::Float(x)) = x.evaluate(env) {
@@ -119,6 +125,8 @@ impl Expression {
                                 });
                                 Some(Expression::Float(result))
                             }
+                            // Creates an anonymous procedure. If one wants to create a function in the imperative programming sense, one wants to
+                            // bind this anynomous procedure to a symbol using `define`.
                             "lambda" => {
                                 if let [_, Expression::List(params), Expression::List(body)] =
                                     list.as_slice()
@@ -128,6 +136,7 @@ impl Expression {
                                     None
                                 }
                             }
+                            // Binds an Expression to a Expression::Symbol
                             "define" => {
                                 if let [_, Expression::Symbol(name), ref expression] =
                                     list.as_slice()
@@ -138,6 +147,7 @@ impl Expression {
                                 }
                                 None
                             }
+                            // Not any of the internal procedures above, this could be a user defined functions.
                             name => {
                                 if let Some(Expression::Procedure(parameter, body)) =
                                     env.global.get(name)
@@ -166,10 +176,13 @@ impl Expression {
                             }
                         }
                     }
+                    // NOTE: The first Expression in the list is not an instance of an Expression::Symbol.
+                    // What should happen here? We could evaluate this as the first Expression in the list.
                     [..] => None,
                 }
             }
-            // NOTE: What _should_ happen here?
+            // NOTE: User invoked a call to `lambda` without binding it to a symbol.
+            // What _should_ happen here?
             Expression::Procedure(_, _) => None,
         }
     }
